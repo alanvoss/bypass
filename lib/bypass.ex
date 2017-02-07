@@ -35,6 +35,12 @@ defmodule Bypass do
   def down(%Bypass{pid: pid}),
     do: Bypass.Instance.call(pid, :down)
 
+  def expect(%Bypass{pid: pid}, methods, route, fun) do
+require IEx
+IEx.pry
+    Bypass.Instance.call(pid, {:expect, methods, route, fun})
+  end
+
   def expect(%Bypass{pid: pid}, fun),
     do: Bypass.Instance.call(pid, {:expect, fun})
 

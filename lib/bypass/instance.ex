@@ -36,13 +36,15 @@ defmodule Bypass.Instance do
         socket = do_up(port, ref)
 
         state = %{
-          expect_fun: nil,
+          expect: %{},
           port: port,
           ref: ref,
           request_result: :ok,
           socket: socket,
           retained_plug: nil,
           caller_awaiting_down: nil,
+          compile_routes: true,
+          plug: nil
         }
 
         {:ok, state}
@@ -90,15 +92,66 @@ defmodule Bypass.Instance do
     end
   end
 
-  defp do_handle_call({:expect, nil}, _from, state) do
-    {:reply, :ok, %{state | expect_fun: nil, request_result: :ok}}
-  end
-  defp do_handle_call({:expect, fun}, _from, state) do
-    {:reply, :ok, %{state | expect_fun: fun, request_result: {:error, :not_called}}}
+  defp do_handle_call({:plug, conn}, _from, state) do
+    state = compile_routes(state)
+    {:reply, state.plug, %{state | compile_routes: false}}
   end
 
-  defp do_handle_call(:get_expect_fun, _from, %{expect_fun: expect_fun} = state) do
-    {:reply, expect_fun, state}
+  defp compile_routes(%{compile_routes: false} = state), do: state
+  defp compile_routes(%{} = state) do
+    nil
+  end
+
+  #defp do_handle_call({:expect, fun}, _from, state) when is_function(fun) do
+  #  expectations = add_routes("<ANY>", "<ANY>", fun)
+  #  state = Map.update!(state, :expect, &(Map.put(&1, :any, fun)))
+  #  {:reply, expectations, %{state | compile_routes: true}}
+  #end
+  #defp do_handle_call({:expect, _}, _from, state) do
+  #  expectations = add_routes("<ANY>", "<ANY>", nil)
+  #  state = Map.update!(state, :expect, &(Map.put(&1, :any, nil)))
+  #  {:reply, expectations, %{state | compile_routes: true}}
+  #end
+  defp do_handle_call({:expect, methods, paths, fun}, from, state) do
+    macros = add_routes(methods, paths, fun)
+    {:reply, Keyword.get_values(macros, :expectation), %{state | compile_routes: true}}
+  end
+
+  defp add_routes(methods, paths, fun) when not is_list(methods) do
+    add_routes([methods], paths, fun)
+  end
+  defp add_routes(methods, paths, fun) when not is_list(paths) do
+    add_routes(methods, [paths], fun)
+  end
+  defp add_routes(methods, paths, fun) do
+    add_routes(methods, paths, fun, [])
+  end
+  defp add_routes([], [], fun, macros), do: macros
+  defp add_routes([method | rest], paths, fun, macros) when length(rest) > 0 do
+    add_routes([method], paths, fun, macros ++ add_routes(rest, paths, fun))
+  end
+  defp add_routes(method, [path | rest], fun, macros) when length(rest) > 0 do
+    add_routes(method, [path], fun, macros ++ add_routes(method, rest, fun))
+  end
+  defp add_routes([method], [path], fun, macros) do
+    expectation = quote bind_quoted: [method: method, path: path] do
+      IO.puts "Call #{method} #{path} at least once"
+      assert method == "YOURMOM"
+      assert path == "ELIXIR"
+    end
+
+    route = quote bind_quoted: [method: method, path: path] do
+      def call(%{method: method, request_path: path} = conn, pid) do
+        fun.(conn)
+      end 
+    end
+
+    #route = case method do
+    #  #"<any"> ->
+    #  #  quote match _, do: fun
+    #  method ->
+    #    quote unquote(method) "unquote(route)", do: fun
+    add_routes([], [], fun, macros ++ [{:expectation, expectation}, {:route, route}])
   end
 
   defp do_handle_call({:put_expect_result, result}, _from, state) do

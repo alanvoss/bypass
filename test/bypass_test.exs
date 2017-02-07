@@ -174,4 +174,20 @@ defmodule BypassTest do
       assert_receive {:DOWN, ^monitor, :process, ^conn, _}
     end
   end
+
+  @tag :wip
+  test "macro test me Bypass.expect can be made to pass by calling Bypass.pass" do
+    bypass = Bypass.open
+    #x = Bypass.expect(bypass, ["GET"], "/this", fn _conn ->
+    x = Bypass.expect(bypass, ["GET", "POST"], "/this", fn _conn ->
+    #Bypass.expect(bypass, ["GET", "POST"], ["/this", "/that"], fn _conn ->
+#Bypass.expect(bypass, ["GET", "POST"], ["/this", "/that"], fn _conn ->
+IO.puts "got to this one here"
+      assert 1 == 2
+    end)
+require IEx
+IEx.pry
+x
+    assert 1 == 3
+  end
 end
