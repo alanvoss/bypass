@@ -11,6 +11,7 @@ responses from the server.
 
 Add bypass to your list of dependencies in mix.exs:
 
+
 ```elixir
 def deps do
   [{:bypass, "~> 0.1", only: :test}]
